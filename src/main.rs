@@ -1,8 +1,11 @@
+use chrono::Utc;
+use clap::Parser;
+use console::style;
 use image::RgbImage;
 use indicatif::{ProgressBar, ProgressIterator, ProgressState, ProgressStyle};
 use rand::prelude::*;
+use std::path::Path;
 use std::{
-    cmp::Ordering::*,
     fmt::Write,
     ops::{Add, Mul, Sub},
 };
@@ -89,8 +92,7 @@ struct Sierpinski {
     triangle: Triangle,
     rng: ThreadRng,
     iterations: u32,
-    width: u32,
-    height: u32,
+    size: u32,
 }
 
 impl Sierpinski {
@@ -115,23 +117,21 @@ impl Sierpinski {
         arr[self.rng.gen_range(0..arr.len())]
     }
 
-    fn init(width: u32, height: u32, iterations: u32) -> Self {
-        let size = match width.cmp(&height) {
-            Equal => width,
-            Greater => height,
-            Less => width,
-        };
-
+    fn init(size: u32, iterations: u32) -> Self {
         Self {
             triangle: Triangle::new(size.into()),
             rng: rand::thread_rng(),
             iterations,
-            width,
-            height,
+            size,
         }
     }
 
     fn gen_fractal(mut self) -> RgbImage {
+        println!(
+            "{} {}Generating fractal...",
+            style("[1/3]").bold().dim(),
+            console::Emoji("🌀  ", "")
+        );
         //Setup progress bar
         let pb = ProgressBar::new(self.iterations.into());
         pb.set_style(
@@ -142,7 +142,7 @@ impl Sierpinski {
         );
 
         //Fractal generation
-        let mut imgbuf = RgbImage::new(self.width, self.height);
+        let mut imgbuf = RgbImage::new(self.size, self.size);
         let mut point = self.get_triangle_random_point();
 
         for _ in (0..self.iterations).progress_with(pb.clone()) {
@@ -152,43 +152,84 @@ impl Sierpinski {
             point = Point { x, y };
         }
 
-        print!("Finished in {:?}", pb.elapsed());
+        pb.finish_with_message(format!("Finished in {:?}.", pb.elapsed()));
 
         imgbuf
     }
 }
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    size: u32,
 
-fn main() {
-    println!("Starting");
+    #[arg(short, long, default_value_t = 4_000_000)]
+    quality: u32,
 
-    let width = std::env::args()
-        .nth(2)
-        .expect("no width given")
-        .parse()
-        .expect("Not a valid number");
+    #[arg(short = 'd', long, default_value_t = {String::from("./")})]
+    output_directory: String,
+}
 
-    let height = std::env::args()
-        .nth(3)
-        .expect("no height given")
-        .parse()
-        .expect("Not a valid number");
-
-    let quality = std::env::args()
-        .nth(4)
-        .expect("no quality given (recommended 8 milion)")
-        .parse()
-        .expect("Not a valid number");
-
-    let mut name = std::env::args().nth(1).expect("no name given");
-    name = format!("{name}_{width}x{height}_{quality}");
-
-    if !name.ends_with(".png") {
-        name += ".png";
+fn check_path(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let parent_dir = path.parent().ok_or("Invalid path")?;
+    if !parent_dir.exists() {
+        return Err(format!("Directory {:?} does not exist", parent_dir).into());
     }
 
-    let sier = Sierpinski::init(width, height, quality);
+    Ok(())
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let path = Path::new(&args.output_directory);
+
+    let file_name = format!(
+        "{0}_{1}x{1}_{2}.png",
+        Utc::now().format("%d%H%M%S"),
+        args.size,
+        args.quality
+    );
+
+    let path = path.join(file_name);
+
+    match check_path(&path) {
+        Ok(()) => (),
+        Err(err) => {
+            eprintln!("{}: {err}", console::style("error").red(),);
+            std::process::exit(1);
+        }
+    }
+
+    match check_path(&path) {
+        Ok(()) => (),
+        Err(_err) => {
+            eprintln!(
+                "{}: The specified directory does not exist:\n  '{}'",
+                console::style("error").red(),
+                console::style(path.display()).green()
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let sier = Sierpinski::init(args.size, args.quality);
     let image = sier.gen_fractal();
+
+    println!(
+        "{} {}Saving file...",
+        style("[2/3]").bold().dim(),
+        console::Emoji("💾  ", "")
+    );
     image
-        .save(name)
+        .save(&path)
+        .map(|()| {
+            println!(
+                "{} {}Saved to: {}",
+                style("[3/3]").bold().dim(),
+                console::Emoji("✅  ", ""),
+                path.display()
+            )
+        })
         .expect("An error occured while trying to save the file");
 }
