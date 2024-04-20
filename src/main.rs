@@ -132,6 +132,7 @@ impl Sierpinski {
             style("[1/3]").bold().dim(),
             console::Emoji("🌀  ", "")
         );
+
         //Setup progress bar
         let pb = ProgressBar::new(self.iterations.into());
         pb.set_style(
@@ -157,6 +158,7 @@ impl Sierpinski {
         imgbuf
     }
 }
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -182,8 +184,6 @@ fn check_path(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 fn main() {
     let args = Args::parse();
 
-    let path = Path::new(&args.output_directory);
-
     let file_name = format!(
         "{0}_{1}x{1}_{2}.png",
         Utc::now().format("%d%H%M%S"),
@@ -191,7 +191,7 @@ fn main() {
         args.quality
     );
 
-    let path = path.join(file_name);
+    let path = Path::new(&args.output_directory).join(file_name);
 
     match check_path(&path) {
         Ok(()) => (),
@@ -200,18 +200,6 @@ fn main() {
             std::process::exit(1);
         }
     }
-
-    match check_path(&path) {
-        Ok(()) => (),
-        Err(_err) => {
-            eprintln!(
-                "{}: The specified directory does not exist:\n  '{}'",
-                console::style("error").red(),
-                console::style(path.display()).green()
-            );
-            std::process::exit(1);
-        }
-    };
 
     let sier = Sierpinski::init(args.size, args.quality);
     let image = sier.gen_fractal();
