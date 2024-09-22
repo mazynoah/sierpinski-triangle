@@ -4,6 +4,7 @@ use console::style;
 use image::RgbImage;
 use indicatif::{ProgressBar, ProgressIterator, ProgressState, ProgressStyle};
 use rand::prelude::*;
+use std::fs;
 use std::path::Path;
 use std::{
     fmt::Write,
@@ -174,6 +175,8 @@ struct Args {
 
 fn check_path(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let parent_dir = path.parent().ok_or("Invalid path")?;
+    fs::create_dir_all(parent_dir).expect("Couldn't create output folder");
+
     if !parent_dir.exists() {
         return Err(format!("Directory {:?} does not exist", parent_dir).into());
     }
